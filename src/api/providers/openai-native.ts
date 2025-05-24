@@ -6,6 +6,7 @@ import { ApiHandlerOptions, ModelInfo, openAiNativeDefaultModelId, OpenAiNativeM
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { calculateApiCostOpenAI } from "../../utils/cost"
 import { ApiStream } from "../transform/stream"
+import { convertToCompletionsPrompt } from "../transform/completions-format"
 import type { ChatCompletionReasoningEffort } from "openai/resources/chat/completions"
 
 export class OpenAiNativeHandler implements ApiHandler {
@@ -79,6 +80,33 @@ export class OpenAiNativeHandler implements ApiHandler {
 					}
 					if (chunk.usage) {
 						// Only last chunk contains usage
+						yield* this.yieldUsage(model.info, chunk.usage)
+					}
+				}
+				break
+			}
+			case "code-davinci-002":
+			case "code-cushman-001": {
+				// Codex models use completions API
+				const prompt = convertToCompletionsPrompt(systemPrompt, messages)
+				
+				const stream = await this.client.completions.create({
+					model: model.id,
+					prompt,
+					temperature: 0,
+					max_tokens: model.info.maxTokens || undefined,
+					stream: true,
+				})
+
+				for await (const chunk of stream) {
+					const choice = chunk.choices[0]
+					if (choice?.text) {
+						yield {
+							type: "text",
+							text: choice.text,
+						}
+					}
+					if (chunk.usage) {
 						yield* this.yieldUsage(model.info, chunk.usage)
 					}
 				}

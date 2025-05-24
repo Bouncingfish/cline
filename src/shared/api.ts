@@ -133,6 +133,7 @@ export interface ModelInfo {
 export interface OpenAiCompatibleModelInfo extends ModelInfo {
 	temperature?: number
 	isR1FormatRequired?: boolean
+	useCompletionsApi?: boolean
 }
 
 // Anthropic
@@ -644,6 +645,7 @@ export const openAiModelInfoSaneDefaults: OpenAiCompatibleModelInfo = {
 	supportsImages: true,
 	supportsPromptCache: false,
 	isR1FormatRequired: false,
+	useCompletionsApi: false,
 	inputPrice: 0,
 	outputPrice: 0,
 	temperature: 0,
@@ -937,6 +939,22 @@ export const openAiNativeModels = {
 		supportsPromptCache: true,
 		inputPrice: 75,
 		outputPrice: 150,
+	},
+	"code-davinci-002": {
+		maxTokens: 8_000,
+		contextWindow: 8_000,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
+	},
+	"code-cushman-001": {
+		maxTokens: 2_048,
+		contextWindow: 2_048,
+		supportsImages: false,
+		supportsPromptCache: false,
+		inputPrice: 0,
+		outputPrice: 0,
 	},
 } as const satisfies Record<string, ModelInfo>
 

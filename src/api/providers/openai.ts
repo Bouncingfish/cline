@@ -6,6 +6,7 @@ import { ApiHandler } from "../index"
 import { convertToOpenAiMessages } from "../transform/openai-format"
 import { ApiStream } from "../transform/stream"
 import { convertToR1Format } from "../transform/r1-format"
+import { convertToCompletionsPrompt } from "../transform/completions-format"
 import type { ChatCompletionReasoningEffort } from "openai/resources/chat/completions"
 
 export class OpenAiHandler implements ApiHandler {
@@ -43,11 +44,8 @@ export class OpenAiHandler implements ApiHandler {
 		const isDeepseekReasoner = modelId.includes("deepseek-reasoner")
 		const isR1FormatRequired = this.options.openAiModelInfo?.isR1FormatRequired ?? false
 		const isReasoningModelFamily = modelId.includes("o1") || modelId.includes("o3") || modelId.includes("o4")
+		const useCompletionsApi = this.options.openAiModelInfo?.useCompletionsApi ?? false
 
-		let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
-			{ role: "system", content: systemPrompt },
-			...convertToOpenAiMessages(messages),
-		]
 		let temperature: number | undefined = this.options.openAiModelInfo?.temperature ?? openAiModelInfoSaneDefaults.temperature
 		let reasoningEffort: ChatCompletionReasoningEffort | undefined = undefined
 		let maxTokens: number | undefined
@@ -58,46 +56,83 @@ export class OpenAiHandler implements ApiHandler {
 			maxTokens = undefined
 		}
 
-		if (isDeepseekReasoner || isR1FormatRequired) {
-			openAiMessages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
-		}
+		if (useCompletionsApi) {
+			// Use completions API for models like Codex
+			const prompt = convertToCompletionsPrompt(systemPrompt, messages)
+			
+			const stream = await this.client.completions.create({
+				model: modelId,
+				prompt,
+				temperature,
+				max_tokens: maxTokens,
+				stream: true,
+			})
 
-		if (isReasoningModelFamily) {
-			openAiMessages = [{ role: "developer", content: systemPrompt }, ...convertToOpenAiMessages(messages)]
-			temperature = undefined // does not support temperature
-			reasoningEffort = (this.options.reasoningEffort as ChatCompletionReasoningEffort) || "medium"
-		}
+			for await (const chunk of stream) {
+				const choice = chunk.choices[0]
+				if (choice?.text) {
+					yield {
+						type: "text",
+						text: choice.text,
+					}
+				}
 
-		const stream = await this.client.chat.completions.create({
-			model: modelId,
-			messages: openAiMessages,
-			temperature,
-			max_tokens: maxTokens,
-			reasoning_effort: reasoningEffort,
-			stream: true,
-			stream_options: { include_usage: true },
-		})
-		for await (const chunk of stream) {
-			const delta = chunk.choices[0]?.delta
-			if (delta?.content) {
-				yield {
-					type: "text",
-					text: delta.content,
+				if (chunk.usage) {
+					yield {
+						type: "usage",
+						inputTokens: chunk.usage.prompt_tokens || 0,
+						outputTokens: chunk.usage.completion_tokens || 0,
+					}
 				}
 			}
+		} else {
+			// Use chat completions API (existing logic)
+			let openAiMessages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+				{ role: "system", content: systemPrompt },
+				...convertToOpenAiMessages(messages),
+			]
 
-			if (delta && "reasoning_content" in delta && delta.reasoning_content) {
-				yield {
-					type: "reasoning",
-					reasoning: (delta.reasoning_content as string | undefined) || "",
-				}
+			if (isDeepseekReasoner || isR1FormatRequired) {
+				openAiMessages = convertToR1Format([{ role: "user", content: systemPrompt }, ...messages])
 			}
 
-			if (chunk.usage) {
-				yield {
-					type: "usage",
-					inputTokens: chunk.usage.prompt_tokens || 0,
-					outputTokens: chunk.usage.completion_tokens || 0,
+			if (isReasoningModelFamily) {
+				openAiMessages = [{ role: "developer", content: systemPrompt }, ...convertToOpenAiMessages(messages)]
+				temperature = undefined // does not support temperature
+				reasoningEffort = (this.options.reasoningEffort as ChatCompletionReasoningEffort) || "medium"
+			}
+
+			const stream = await this.client.chat.completions.create({
+				model: modelId,
+				messages: openAiMessages,
+				temperature,
+				max_tokens: maxTokens,
+				reasoning_effort: reasoningEffort,
+				stream: true,
+				stream_options: { include_usage: true },
+			})
+			for await (const chunk of stream) {
+				const delta = chunk.choices[0]?.delta
+				if (delta?.content) {
+					yield {
+						type: "text",
+						text: delta.content,
+					}
+				}
+
+				if (delta && "reasoning_content" in delta && delta.reasoning_content) {
+					yield {
+						type: "reasoning",
+						reasoning: (delta.reasoning_content as string | undefined) || "",
+					}
+				}
+
+				if (chunk.usage) {
+					yield {
+						type: "usage",
+						inputTokens: chunk.usage.prompt_tokens || 0,
+						outputTokens: chunk.usage.completion_tokens || 0,
+					}
 				}
 			}
 		}
