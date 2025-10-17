@@ -24,11 +24,11 @@ export async function updateApiConfigurationProto(
 		const appApiConfiguration = convertProtoToApiConfiguration(request.apiConfiguration)
 
 		// Update the API configuration in storage
-		controller.cacheService.setApiConfiguration(appApiConfiguration)
+		controller.stateManager.setApiConfiguration(appApiConfiguration)
 
 		// Update the task's API handler if there's an active task
 		if (controller.task) {
-			const currentMode = await controller.getCurrentMode()
+			const currentMode = controller.stateManager.getGlobalSettingsKey("mode")
 			controller.task.api = buildApiHandler({ ...appApiConfiguration, ulid: controller.task.ulid }, currentMode)
 		}
 

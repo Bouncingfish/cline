@@ -86,6 +86,7 @@ function convertClineSayToProtoEnum(say: AppClineSay | undefined): ClineSay | un
 		command_output: ClineSay.COMMAND_OUTPUT_SAY,
 		tool: ClineSay.TOOL_SAY,
 		shell_integration_warning: ClineSay.SHELL_INTEGRATION_WARNING,
+		shell_integration_warning_with_suggestion: ClineSay.SHELL_INTEGRATION_WARNING,
 		browser_action_launch: ClineSay.BROWSER_ACTION_LAUNCH_SAY,
 		browser_action: ClineSay.BROWSER_ACTION,
 		browser_action_result: ClineSay.BROWSER_ACTION_RESULT,
@@ -100,6 +101,7 @@ function convertClineSayToProtoEnum(say: AppClineSay | undefined): ClineSay | un
 		load_mcp_documentation: ClineSay.LOAD_MCP_DOCUMENTATION,
 		info: ClineSay.INFO,
 		task_progress: ClineSay.TASK_PROGRESS,
+		error_retry: ClineSay.ERROR_RETRY,
 	}
 
 	const result = mapping[say]
@@ -145,6 +147,7 @@ function convertProtoEnumToClineSay(say: ClineSay): AppClineSay | undefined {
 		[ClineSay.LOAD_MCP_DOCUMENTATION]: "load_mcp_documentation",
 		[ClineSay.INFO]: "info",
 		[ClineSay.TASK_PROGRESS]: "task_progress",
+		[ClineSay.ERROR_RETRY]: "error_retry",
 	}
 
 	return mapping[say]
@@ -188,6 +191,15 @@ export function convertClineMessageToProto(message: AppClineMessage): ProtoCline
 					endIndex: message.conversationHistoryDeletedRange[1],
 				}
 			: undefined,
+		// Additional optional fields for specific ask/say types
+		sayTool: undefined,
+		sayBrowserAction: undefined,
+		browserActionResult: undefined,
+		askUseMcpServer: undefined,
+		planModeResponse: undefined,
+		askQuestion: undefined,
+		askNewTask: undefined,
+		apiReqInfo: undefined,
 	}
 
 	return protoMessage

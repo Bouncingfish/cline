@@ -35,11 +35,11 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 							const errorDetails = clineError._error?.details
 							return (
 								<CreditLimitError
+									buyCreditsUrl={errorDetails?.buy_credits_url}
 									currentBalance={errorDetails?.current_balance}
 									message={errorDetails?.message}
 									totalPromotions={errorDetails?.total_promotions}
 									totalSpent={errorDetails?.total_spent}
-									// buyCreditsUrl={errorDetails?.buy_credits_url}
 								/>
 							)
 						}
@@ -54,10 +54,15 @@ const ErrorRow = memo(({ message, errorType, apiRequestFailedMessage, apiReqStre
 						)
 					}
 
+					// For non-cline providers, we display the raw error message
+					const errorMessageToDisplay = isClineProvider
+						? clineErrorMessage
+						: apiReqStreamingFailedMessage || apiRequestFailedMessage
+
 					// Default error display
 					return (
 						<p className="m-0 whitespace-pre-wrap text-[var(--vscode-errorForeground)] wrap-anywhere">
-							{clineErrorMessage}
+							{errorMessageToDisplay}
 							{requestId && <div>Request ID: {requestId}</div>}
 							{clineErrorMessage?.toLowerCase()?.includes("powershell") && (
 								<>

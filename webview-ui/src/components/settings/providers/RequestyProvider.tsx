@@ -1,3 +1,4 @@
+import { toRequestyServiceUrl } from "@shared/providers/requesty"
 import { Mode } from "@shared/storage/types"
 import { VSCodeCheckbox } from "@vscode/webview-ui-toolkit/react"
 import { useState } from "react"
@@ -25,13 +26,16 @@ export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: Req
 
 	const [requestyEndpointSelected, setRequestyEndpointSelected] = useState(!!apiConfiguration?.requestyBaseUrl)
 
+	const resolvedUrl = toRequestyServiceUrl(apiConfiguration?.requestyBaseUrl, "app")
+	const apiKeyUrl = resolvedUrl != null ? new URL("api-keys", resolvedUrl).toString() : undefined
+
 	return (
 		<div>
 			<ApiKeyField
 				initialValue={apiConfiguration?.requestyApiKey || ""}
 				onChange={(value) => handleFieldChange("requestyApiKey", value)}
 				providerName="Requesty"
-				signupUrl="https://app.requesty.ai/api-keys"
+				signupUrl={apiKeyUrl}
 			/>
 			<VSCodeCheckbox
 				checked={requestyEndpointSelected}
@@ -40,7 +44,7 @@ export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: Req
 					setRequestyEndpointSelected(isChecked)
 
 					if (!isChecked) {
-						handleFieldChange("requestyBaseUrl", "")
+						handleFieldChange("requestyBaseUrl", undefined)
 					}
 				}}>
 				Use custom base URL
@@ -49,14 +53,20 @@ export const RequestyProvider = ({ showModelOptions, isPopup, currentMode }: Req
 				<DebouncedTextField
 					initialValue={apiConfiguration?.requestyBaseUrl ?? ""}
 					onChange={(value) => {
-						handleFieldChange("requestyBaseUrl", value)
+						if (value.length === 0) {
+							handleFieldChange("requestyBaseUrl", undefined)
+						} else {
+							handleFieldChange("requestyBaseUrl", value)
+						}
 					}}
 					placeholder="Custom base URL"
 					style={{ width: "100%", marginBottom: 5 }}
-					type="url"
+					type="text"
 				/>
 			)}
-			{showModelOptions && <RequestyModelPicker currentMode={currentMode} isPopup={isPopup} />}
+			{showModelOptions && (
+				<RequestyModelPicker baseUrl={apiConfiguration?.requestyBaseUrl} currentMode={currentMode} isPopup={isPopup} />
+			)}
 		</div>
 	)
 }

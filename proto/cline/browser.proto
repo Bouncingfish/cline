@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package cline;
 import "cline/common.proto";
+option go_package = "github.com/cline/grpc-go/cline";
 option java_package = "bot.cline.proto";
 option java_multiple_files = true;
 
@@ -10,7 +11,6 @@ service BrowserService {
   rpc testBrowserConnection(StringRequest) returns (BrowserConnection);
   rpc discoverBrowser(EmptyRequest) returns (BrowserConnection);
   rpc getDetectedChromePath(EmptyRequest) returns (ChromePath);
-  rpc updateBrowserSettings(UpdateBrowserSettingsRequest) returns (Boolean);
   rpc relaunchChromeDebugMode(EmptyRequest) returns (String);
 }
 

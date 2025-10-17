@@ -1,6 +1,5 @@
 import { Empty } from "@shared/proto/cline/common"
 import { AutoApprovalSettingsRequest } from "@shared/proto/cline/state"
-import { convertProtoToAutoApprovalSettings } from "../../../shared/proto-conversions/models/auto-approval-settings-conversion"
 import { Controller } from ".."
 
 /**
@@ -16,13 +15,33 @@ export async function updateAutoApprovalSettings(controller: Controller, request
 
 	// Only update if incoming version is higher
 	if (incomingVersion > currentVersion) {
-		const settings = convertProtoToAutoApprovalSettings(request)
-
-		controller.cacheService.setGlobalState("autoApprovalSettings", settings)
+		// Merge with current settings to preserve unspecified fields
+		const settings = {
+			...currentSettings,
+			...(request.version !== undefined && { version: request.version }),
+			...(request.enabled !== undefined && { enabled: request.enabled }),
+			...(request.maxRequests !== undefined && { maxRequests: request.maxRequests }),
+			...(request.enableNotifications !== undefined && { enableNotifications: request.enableNotifications }),
+			...(request.favorites && request.favorites.length > 0 && { favorites: request.favorites }),
+			actions: {
+				...currentSettings.actions,
+				...(request.actions
+					? Object.fromEntries(Object.entries(request.actions).filter(([_, v]) => v !== undefined))
+					: {}),
+			},
+		}
 
 		if (controller.task) {
-			controller.task.updateAutoApprovalSettings(settings)
+			const maxRequestsChanged =
+				controller.stateManager.getGlobalSettingsKey("autoApprovalSettings").maxRequests !== settings.maxRequests
+
+			// Reset counter if max requests limit changed
+			if (maxRequestsChanged) {
+				controller.task.resetConsecutiveAutoApprovedRequestsCount()
+			}
 		}
+
+		controller.stateManager.setGlobalState("autoApprovalSettings", settings)
 
 		await controller.postStateToWebview()
 	}

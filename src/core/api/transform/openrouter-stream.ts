@@ -1,7 +1,11 @@
 import { Anthropic } from "@anthropic-ai/sdk"
-import { CLAUDE_SONNET_4_1M_SUFFIX, ModelInfo, openRouterClaudeSonnet41mModelId } from "@shared/api"
+import {
+	CLAUDE_SONNET_1M_SUFFIX,
+	ModelInfo,
+	openRouterClaudeSonnet41mModelId,
+	openRouterClaudeSonnet451mModelId,
+} from "@shared/api"
 import OpenAI from "openai"
-import { isGPT5ModelFamily } from "../../prompts/system-prompt/utils"
 import { convertToOpenAiMessages } from "./openai-format"
 import { convertToR1Format } from "./r1-format"
 
@@ -20,16 +24,20 @@ export async function createOpenRouterStream(
 		...convertToOpenAiMessages(messages),
 	]
 
-	const isClaudeSonnet41m = model.id === openRouterClaudeSonnet41mModelId
-	if (isClaudeSonnet41m) {
+	const isClaudeSonnet1m = model.id === openRouterClaudeSonnet41mModelId || model.id === openRouterClaudeSonnet451mModelId
+	if (isClaudeSonnet1m) {
 		// remove the custom :1m suffix, to create the model id openrouter API expects
-		model.id = model.id.slice(0, -CLAUDE_SONNET_4_1M_SUFFIX.length)
+		model.id = model.id.slice(0, -CLAUDE_SONNET_1M_SUFFIX.length)
 	}
 
 	// prompt caching: https://openrouter.ai/docs/prompt-caching
 	// this was initially specifically for claude models (some models may 'support prompt caching' automatically without this)
 	// handles direct model.id match logic
 	switch (model.id) {
+		case "anthropic/claude-haiku-4.5":
+		case "anthropic/claude-4.5-haiku":
+		case "anthropic/claude-sonnet-4.5":
+		case "anthropic/claude-4.5-sonnet": // OpenRouter accidentally included this in model list for a brief moment, and users may be using this model id. And to support prompt caching, we need to add it here.
 		case "anthropic/claude-sonnet-4":
 		case "anthropic/claude-opus-4.1":
 		case "anthropic/claude-opus-4":
@@ -89,6 +97,10 @@ export async function createOpenRouterStream(
 	// (models usually default to max tokens allowed)
 	let maxTokens: number | undefined
 	switch (model.id) {
+		case "anthropic/claude-haiku-4.5":
+		case "anthropic/claude-4.5-haiku":
+		case "anthropic/claude-sonnet-4.5":
+		case "anthropic/claude-4.5-sonnet":
 		case "anthropic/claude-sonnet-4":
 		case "anthropic/claude-opus-4.1":
 		case "anthropic/claude-opus-4":
@@ -125,6 +137,10 @@ export async function createOpenRouterStream(
 
 	let reasoning: { max_tokens: number } | undefined
 	switch (model.id) {
+		case "anthropic/claude-haiku-4.5":
+		case "anthropic/claude-4.5-haiku":
+		case "anthropic/claude-sonnet-4.5":
+		case "anthropic/claude-4.5-sonnet":
 		case "anthropic/claude-sonnet-4":
 		case "anthropic/claude-opus-4.1":
 		case "anthropic/claude-opus-4":
@@ -140,27 +156,12 @@ export async function createOpenRouterStream(
 				reasoning = { max_tokens: budget_tokens }
 			}
 			break
-		case "cline/sonic":
-			temperature = 0.7
-			topP = 0.95
-			break
 		default:
 			if (thinkingBudgetTokens && model.info?.thinkingConfig && thinkingBudgetTokens > 0) {
 				temperature = undefined // extended thinking does not support non-1 temperature
 				reasoning = { max_tokens: thinkingBudgetTokens }
 				break
 			}
-	}
-
-	// Removes messages in the middle when close to context window limit. Should not be applied to models that support prompt caching since it would continuously break the cache.
-	let shouldApplyMiddleOutTransform = !model.info.supportsPromptCache
-	// except for deepseek (which we set supportsPromptCache to true for), where because the context window is so small our truncation algo might miss and we should use openrouter's middle-out transform as a fallback to ensure we don't exceed the context window (FIXME: once we have a more robust token estimator we should not rely on this)
-	if (model.id === "deepseek/deepseek-chat") {
-		shouldApplyMiddleOutTransform = true
-	}
-
-	if (isGPT5ModelFamily(model.id)) {
-		shouldApplyMiddleOutTransform = false
 	}
 
 	// hardcoded provider sorting for kimi-k2
@@ -176,7 +177,6 @@ export async function createOpenRouterStream(
 		messages: openAiMessages,
 		stream: true,
 		stream_options: { include_usage: true },
-		transforms: shouldApplyMiddleOutTransform ? ["middle-out"] : undefined,
 		include_reasoning: true,
 		...(model.id.startsWith("openai/o") ? { reasoning_effort: reasoningEffort || "medium" } : {}),
 		...(reasoning ? { reasoning } : {}),
@@ -186,7 +186,7 @@ export async function createOpenRouterStream(
 			? { provider: { order: ["groq", "together", "baseten", "parasail", "novita", "deepinfra"], allow_fallbacks: false } }
 			: {}),
 		// limit providers to only those that support the 1m context window
-		...(isClaudeSonnet41m ? { provider: { order: ["anthropic", "amazon-bedrock"], allow_fallbacks: false } } : {}),
+		...(isClaudeSonnet1m ? { provider: { order: ["anthropic", "google-vertex/global"], allow_fallbacks: false } } : {}),
 	})
 
 	return stream
